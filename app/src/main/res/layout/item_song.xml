@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="64dp"
+    android:layout_marginVertical="4dp"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingHorizontal="24dp"
+    android:focusable="true"
+    android:focusableInTouchMode="true"
+    android:clickable="true"
+    android:background="@drawable/bg_item_selector">
+
+    <TextView
+        android:id="@+id/tv_index"
+        android:layout_width="40dp"
+        android:layout_height="wrap_content"
+        android:textColor="@color/text_dim"
+        android:textSize="14sp"
+        android:gravity="center" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_marginHorizontal="14dp">
+
+        <TextView
+            android:id="@+id/tv_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text_primary"
+            android:textSize="15sp"
+            android:singleLine="true"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/tv_artist"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp"
+            android:singleLine="true"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <!-- 码率标签 -->
+    <TextView
+        android:id="@+id/tv_bitrate"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/accent"
+        android:textSize="11sp"
+        android:background="@drawable/bg_source_badge"
+        android:paddingHorizontal="6dp"
+        android:paddingVertical="2dp"
+        android:layout_marginEnd="8dp" />
+
+    <!-- 音源标签 -->
+    <TextView
+        android:id="@+id/tv_source"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/text_secondary"
+        android:textSize="11sp"
+        android:background="@drawable/bg_source_badge"
+        android:paddingHorizontal="6dp"
+        android:paddingVertical="2dp" />
+
+    <!-- 收藏按钮 -->
+    <TextView
+        android:id="@+id/btn_fav"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:text="♥"
+        android:textColor="#FF999999"
+        android:textSize="16sp"
+        android:gravity="center"
+        android:layout_marginStart="6dp"
+        android:background="@drawable/bg_control_focus"
+        android:clickable="true"
+        android:focusable="true"
+        android:focusableInTouchMode="true" />
+
+    <!-- 删除按钮（编辑模式下可见） -->
+    <TextView
+        android:id="@+id/btn_delete"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:text="✕"
+        android:textColor="#FFFF4444"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/bg_control_focus"
+        android:clickable="true"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:visibility="gone" />
+</LinearLayout>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">苗苗music</string>
+    <string name="search_hint">输入歌曲名、歌手名搜索...</string>
+    <string name="search_tip">支持网易云 / QQ / 酷我 / 酷狗 / 咪咕</string>
+    <string name="loading">加载中...</string>
+    <string name="no_result">暂无搜索结果</string>
+    <string name="play">播放</string>
+    <string name="pause">暂停</string>
+    <string name="next">下一首</string>
+    <string name="previous">上一首</string>
+    <string name="now_playing">正在播放</string>
+    <string name="select_source">选择音源</string>
+    <string name="select_quality">选择音质</string>
+    <string name="quality_flac">FLAC 无损</string>
+    <string name="quality_320">320kbps</string>
+    <string name="quality_192">192kbps</string>
+    <string name="quality_128">128kbps</string>
+    <string name="bitrate_label">码率</string>
+    <string name="lyric_loading">歌词加载中...</string>
+    <string name="no_lyric">暂无歌词</string>
+    <string name="search_results">搜索结果</string>
+    <string name="songs_count">%d 首</string>
+    <string name="platform_label">音源</string>
+</resources>

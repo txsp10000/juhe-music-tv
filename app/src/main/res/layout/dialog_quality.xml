@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="@color/bg_card">
+
+    <TextView
+        android:id="@+id/tv_quality_high"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:text="高品质"
+        android:textColor="#FFFFFFFF"
+        android:textSize="16sp"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="20dp"
+        android:background="@drawable/bg_item_selector"
+        android:clickable="true"
+        android:focusable="true"
+        android:focusableInTouchMode="true" />
+
+    <TextView
+        android:id="@+id/tv_quality_low"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:text="标准品质"
+        android:textColor="#FFFFFFFF"
+        android:textSize="16sp"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="20dp"
+        android:background="@drawable/bg_item_selector"
+        android:clickable="true"
+        android:focusable="true"
+        android:focusableInTouchMode="true" />
+
+    <TextView
+        android:id="@+id/tv_quality_accompaniment"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:text="伴奏"
+        android:textColor="#FFFFFFFF"
+        android:textSize="16sp"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="20dp"
+        android:background="@drawable/bg_item_selector"
+        android:clickable="true"
+        android:focusable="true"
+        android:focusableInTouchMode="true" />
+
+    <TextView
+        android:id="@+id/tv_quality_cancel"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:layout_marginTop="12dp"
+        android:text="取消"
+        android:textColor="#FF8F919A"
+        android:textSize="16sp"
+        android:gravity="center"
+        android:paddingHorizontal="20dp"
+        android:background="@drawable/bg_item_selector"
+        android:clickable="true"
+        android:focusable="true"
+        android:focusableInTouchMode="true" />
+</LinearLayout>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.TVMusic" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowIsTranslucent">false</item>
+        <item name="android:windowBackground">#FF0A0A0D</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:colorPrimary">#FF6C97FF</item>
+        <item name="android:colorAccent">#FF6C97FF</item>
+        <item name="colorPrimary">#FF6C97FF</item>
+        <item name="colorAccent">#FF6C97FF</item>
+        <item name="android:alertDialogTheme">@style/DarkDialog</item>
+    </style>
+
+    <style name="DarkDialog" parent="Theme.AppCompat.Dialog.Alert">
+        <item name="android:background">#FF171B26</item>
+        <item name="android:textColor">#FFF5F5F8</item>
+        <item name="android:textColorPrimary">#FFF5F5F8</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
+
+    <style name="SearchInput" parent="Widget.AppCompat.EditText">
+        <item name="android:background">@drawable/bg_input</item>
+        <item name="android:textColor">#FFF5F5F8</item>
+        <item name="android:textColorHint">#FF8F919A</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:paddingHorizontal">20dp</item>
+        <item name="android:paddingVertical">14dp</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:imeOptions">actionSearch</item>
+        <item name="android:inputType">text</item>
+        <item name="android:focusable">true</item>
+        <item name="android:focusableInTouchMode">true</item>
+    </style>
+
+    <style name="TvButton" parent="Widget.AppCompat.Button">
+        <item name="android:textColor">#FF000000</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:focusable">true</item>
+        <item name="android:focusableInTouchMode">true</item>
+    </style>
+</resources>
