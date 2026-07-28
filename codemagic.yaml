@@ -15,16 +15,13 @@ workflows:
       - name: Build Android APK
         script: |
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleDebug
 
       - name: Locate APK
         script: |
           echo "=== Searching for APK files ==="
           find . -name "*.apk" -type f 2>/dev/null
-          echo "=== Listing release output dir ==="
-          ls -la app/build/outputs/apk/release/ 2>/dev/null || echo "Directory not found"
-          echo "=== Listing all output dirs ==="
-          find app/build/outputs -type f -name "*.apk" 2>/dev/null
+          echo "=== Listing debug output dir ==="
+          ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "Directory not found"
     artifacts:
-      - app/build/outputs/apk/release/*.apk
-      - app/build/outputs/**/*.apk
+      - app/build/outputs/apk/debug/*.apk
