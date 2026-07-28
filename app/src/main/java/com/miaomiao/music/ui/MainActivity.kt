@@ -6,9 +6,8 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
-import android.view.Gravity
 import android.view.KeyEvent
-import android.view.View
+import android.view.Gravity
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -81,6 +80,11 @@ class MainActivity : FragmentActivity() {
         binding.btnGotoPlayer.setOnClickListener {
             if (PlayerManager.currentSong != null) {
                 startActivity(Intent(this, PlayerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+            } else {
+                Toast.makeText(this, "暂无播放", Toast.LENGTH_SHORT).apply {
+                    setGravity(Gravity.CENTER, 0, 0)
+                    show()
+                }
             }
         }
 
@@ -310,12 +314,9 @@ class MainActivity : FragmentActivity() {
     private fun syncUI() {
         val song = PlayerManager.currentSong
         if (song != null) {
-            binding.btnGotoPlayer.visibility = View.VISIBLE
-            binding.spaceAfterPlayer.visibility = View.VISIBLE
             binding.tvNowPlayingInfo.text = "${song.name} - ${song.artist}"
         } else {
-            binding.btnGotoPlayer.visibility = View.GONE
-            binding.spaceAfterPlayer.visibility = View.GONE
+            binding.tvNowPlayingInfo.text = "暂无播放"
         }
     }
 
