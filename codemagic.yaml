@@ -17,4 +17,4 @@ workflows:
           chmod +x gradlew
           ./gradlew assembleRelease
     artifacts:
-      - app/build/outputs/apk/release/app-release.apk
+      - app/build/outputs/apk/release/*.apk
