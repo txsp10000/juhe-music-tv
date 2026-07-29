@@ -102,7 +102,7 @@ class MainActivity : FragmentActivity() {
             }
             val pick = pinnedPlaylists.random()
             val intent = Intent(this, SearchResultActivity::class.java)
-            intent.putExtra("keyword", pick)
+            intent.putExtra("keyword", "$pick歌单")
             startActivity(intent)
         }
     }
@@ -178,7 +178,7 @@ class MainActivity : FragmentActivity() {
 
             setOnClickListener {
                 val intent = Intent(this@MainActivity, SearchResultActivity::class.java)
-                intent.putExtra("keyword", name)
+                intent.putExtra("keyword", "$name歌单")
                 startActivity(intent)
             }
 
@@ -236,7 +236,7 @@ class MainActivity : FragmentActivity() {
 
             setOnClickListener {
                 val intent = Intent(this@MainActivity, SearchResultActivity::class.java)
-                intent.putExtra("keyword", name)
+                intent.putExtra("keyword", "$name歌单")
                 startActivity(intent)
             }
 
