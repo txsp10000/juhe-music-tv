@@ -123,7 +123,7 @@ class MainActivity : FragmentActivity() {
         }
         scope.launch {
             try {
-                val keyword = "${playlistName}歌单"
+                val keyword = playlistName
                 val page1 = MusicApi.searchRaw(keyword, num = 20, page = 1)
                 val songs = page1.songs.toMutableList()
                 if (page1.songs.size >= 20) {
@@ -221,7 +221,7 @@ class MainActivity : FragmentActivity() {
 
             setOnClickListener {
                 val intent = Intent(this@MainActivity, SearchResultActivity::class.java)
-                intent.putExtra("keyword", "${name}歌单")
+                intent.putExtra("keyword", name)
                 startActivity(intent)
             }
 
@@ -279,7 +279,7 @@ class MainActivity : FragmentActivity() {
 
             setOnClickListener {
                 val intent = Intent(this@MainActivity, SearchResultActivity::class.java)
-                intent.putExtra("keyword", "${name}歌单")
+                intent.putExtra("keyword", name)
                 startActivity(intent)
             }
 
