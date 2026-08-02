@@ -302,7 +302,7 @@ object PlayerManager {
                 if (requestId != playRequestId) return@launch
 
                 if (localPath != null) {
-                    startPlayer(Uri.fromFile(File(localPath)).toString())
+                    startPlayer(localPath)
                 } else {
                     startPlayer(finalUrl)
                 }
@@ -321,12 +321,13 @@ object PlayerManager {
                 val dir = cacheDir ?: return@withContext null
                 val ext = extractExt(url)
                 val file = File(dir, "${safeFileName(songId)}.$ext")
-                if (file.exists() && file.length() > 0) {
+                if (file.exists() && file.length() > 10_000) {
                     return@withContext file.absolutePath
                 }
+                // 缓存文件太小可能是损坏的，删除重下
+                if (file.exists()) file.delete()
                 val tmpFile = File(dir, "${file.name}.tmp")
                 if (tmpFile.exists()) tmpFile.delete()
-
 
                 val request = Request.Builder()
                     .url(url)
@@ -334,12 +335,18 @@ object PlayerManager {
                     .build()
                 val response = httpClient.newCall(request).execute()
                 if (response.isSuccessful) {
+                    val contentType = response.header("Content-Type") ?: ""
+                    // 如果响应不是音频类型，跳过缓存
+                    if (contentType.isNotEmpty() && !contentType.startsWith("audio") && !contentType.startsWith("application/octet-stream")) {
+                        response.close()
+                        return@withContext null
+                    }
                     response.body?.byteStream()?.use { input ->
                         tmpFile.outputStream().use { output ->
                             input.copyTo(output)
                         }
                     }
-                    if (tmpFile.length() > 0) {
+                    if (tmpFile.length() > 10_000) {
                         if (file.exists()) file.delete()
                         tmpFile.renameTo(file)
                         file.absolutePath
@@ -453,7 +460,8 @@ object PlayerManager {
                 }
                 setOnErrorListener { _, what, extra ->
                     consecutiveErrors++
-                    notifyError("播放出错 (what=$what, extra=$extra)")
+                    val uriShort = if (uri.length > 60) uri.takeLast(60) else uri
+                    notifyError("播放出错 (what=$what, extra=$extra)\n$uriShort")
                     if (consecutiveErrors < 3) next()
                     true
                 }
