@@ -51,7 +51,7 @@ class SearchResultActivity : FragmentActivity() {
     private fun doSearch() {
         currentPage = 1
         hasMore = true
-        searchAndLoad(append = false)
+        searchAndLoad(append = false, loadPages = 2)
     }
 
     private fun loadNextPage() {
@@ -64,7 +64,7 @@ class SearchResultActivity : FragmentActivity() {
         searchAndLoad(append = true)
     }
 
-    private fun searchAndLoad(append: Boolean) {
+    private fun searchAndLoad(append: Boolean, loadPages: Int = 1) {
         searchJob?.cancel()
 
         if (!append) {
@@ -77,29 +77,52 @@ class SearchResultActivity : FragmentActivity() {
         }
 
         searchJob = scope.launch {
-            val result = try {
-                MusicApi.searchRaw(keyword, searchCount, searchSource, currentPage)
-            } catch (e: Exception) {
-                MusicApi.SearchResult(emptyList(), "")
+            var allNewSongs = mutableListOf<Song>()
+            var lastRawBody = ""
+
+            for (page in 0 until loadPages) {
+                val pageNum = currentPage + page
+                val result = try {
+                    MusicApi.searchRaw(keyword, searchCount, searchSource, pageNum)
+                } catch (e: Exception) {
+                    MusicApi.SearchResult(emptyList(), "")
+                }
+                lastRawBody = result.rawBody
+                allNewSongs.addAll(result.songs)
+                if (result.songs.size < searchCount) {
+                    hasMore = false
+                    break
+                }
             }
+            currentPage += loadPages - 1
+            if (allNewSongs.size >= searchCount) hasMore = true
 
             // 隐藏全屏遮罩
             binding.loadingOverlay.visibility = View.GONE
             isLoadingMore = false
 
-            if (result.songs.isNotEmpty()) {
+            if (allNewSongs.isNotEmpty()) {
                 val oldSize = songList.size
                 if (!append) {
                     songList.clear()
                 }
-                songList.addAll(result.songs)
-                hasMore = result.songs.size >= searchCount
+                songList.addAll(allNewSongs)
 
-                // 后台加载封面（使用 pic_id）
+                // 后台加载封面
+                val coverBatch = allNewSongs.toList()
                 launch(Dispatchers.IO) {
-                    val covers = MusicApi.getCovers(songList.map { it.picId.ifEmpty { it.id } })
-                    songList.forEach { it.coverUrl = covers[it.picId.ifEmpty { it.id }] ?: "" }
-                    runOnUiThread { songAdapter.notifyItemRangeChanged(0, songList.size) }
+                    val covers = MusicApi.getCovers(
+                        coverBatch.map { it.picId.ifEmpty { it.id } },
+                        searchSource
+                    )
+                    coverBatch.forEach { song ->
+                        song.coverUrl = covers[song.picId.ifEmpty { song.id }] ?: ""
+                    }
+                    runOnUiThread {
+                        if (!isFinishing && !isDestroyed) {
+                            songAdapter.notifyItemRangeChanged(oldSize, coverBatch.size)
+                        }
+                    }
                 }
 
                 refreshFavoriteStates()
@@ -111,7 +134,6 @@ class SearchResultActivity : FragmentActivity() {
                 if (!append) {
                     binding.rvSongs.post { binding.rvSongs.getChildAt(0)?.requestFocus() }
                 } else {
-                    // 加载完成后聚焦第一条新数据
                     binding.rvSongs.post {
                         val lm = binding.rvSongs.layoutManager as? LinearLayoutManager ?: return@post
                         lm.scrollToPosition(oldSize)
@@ -128,16 +150,16 @@ class SearchResultActivity : FragmentActivity() {
                     binding.tvCount.text = ""
                     binding.tvLoading.visibility = View.GONE
                     binding.tvEmpty.visibility = View.VISIBLE
-                    binding.tvEmpty.text = "重试30次后仍无结果\nAPI返回:\n${result.rawBody.ifEmpty { "空列表" }.take(200)}"
+                    binding.tvEmpty.text = "重试30次后仍无结果\nAPI返回:\n${lastRawBody.ifEmpty { "空列表" }.take(200)}"
                 }
             }
         }
     }
 
     private fun refreshFavoriteStates() {
-        val states = mutableMapOf<Int, Boolean>()
+        val states = mutableMapOf<String, Boolean>()
         for (i in songList.indices) {
-            states[i] = FavoritesManager.isFavorite(this, songList[i])
+            states[SongAdapter.favoriteKey(songList[i])] = FavoritesManager.isFavorite(this, songList[i])
         }
         songAdapter.setFavoriteStates(states)
     }
