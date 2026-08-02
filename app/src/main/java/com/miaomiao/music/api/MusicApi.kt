@@ -91,9 +91,9 @@ object MusicApi {
     }
 
     /** 获取播放URL（999=24bit FLAC无损，最多重试30次） */
-    suspend fun getPlayUrl(trackId: String): String = withContext(Dispatchers.IO) {
+    suspend fun getPlayUrl(trackId: String, source: String = "netease"): String = withContext(Dispatchers.IO) {
         retry {
-            val url = "$BASE?types=url&source=netease&id=$trackId&br=999"
+            val url = "$BASE?types=url&source=$source&id=$trackId&br=320"
             val body = httpGet(url)
             val resp = gson.fromJson(body, UrlResponse::class.java)
             resp.url.ifEmpty { throw Exception("播放地址为空") }
@@ -101,10 +101,10 @@ object MusicApi {
     }
 
     /** 获取歌词（最多重试30次，空结果也重试） */
-    suspend fun getLyric(lyricId: String): String = withContext(Dispatchers.IO) {
+    suspend fun getLyric(lyricId: String, source: String = "netease"): String = withContext(Dispatchers.IO) {
         try {
             retry {
-                val url = "$BASE?types=lyric&source=netease&id=$lyricId"
+                val url = "$BASE?types=lyric&source=$source&id=$lyricId"
                 val body = httpGet(url)
                 val resp = gson.fromJson(body, LyricResponse::class.java)
                 resp.lyric.ifBlank { throw Exception("歌词为空") }

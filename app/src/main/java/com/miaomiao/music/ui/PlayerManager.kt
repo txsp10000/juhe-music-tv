@@ -298,14 +298,9 @@ object PlayerManager {
                 song.lyric = lyric
 
                 currentFileExt = extractExt(finalUrl)
-                val localPath = downloadCurrentOnly("${song.source}_${playId}", finalUrl)
                 if (requestId != playRequestId) return@launch
 
-                if (localPath != null) {
-                    startPlayer(localPath)
-                } else {
-                    startPlayer(finalUrl)
-                }
+                startPlayer(finalUrl)
             } catch (_: CancellationException) {
                 // 切歌时协程取消，静默忽略
             } catch (e: Exception) {
