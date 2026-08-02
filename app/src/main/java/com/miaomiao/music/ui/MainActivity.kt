@@ -13,15 +13,22 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.FragmentActivity
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.miaomiao.music.R
 import com.miaomiao.music.databinding.ActivityMainBinding
+import com.miaomiao.music.model.Song
+import com.miaomiao.music.api.MusicApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 class MainActivity : FragmentActivity() {
     private lateinit var binding: ActivityMainBinding
     private val scope = CoroutineScope(Dispatchers.Main)
+    private val gson = Gson()
+    private val stateListener: (Song?, Boolean) -> Unit = { _, _ -> runOnUiThread { syncUI() } }
 
     private val pinnedPlaylists = mutableListOf<String>()
 
@@ -57,17 +64,21 @@ class MainActivity : FragmentActivity() {
         val prefs = getSharedPreferences("playlist_pins", Context.MODE_PRIVATE)
         val json = prefs.getString("list", "[]") ?: "[]"
         pinnedPlaylists.clear()
-        if (json.length > 2) {
-            json.removeSurrounding("[", "]").split("\",\"").forEach {
-                pinnedPlaylists.add(it.removeSurrounding("\""))
+        try {
+            val type = object : TypeToken<List<String>>() {}.type
+            pinnedPlaylists.addAll(gson.fromJson<List<String>>(json, type) ?: emptyList())
+        } catch (_: Exception) {
+            if (json.length > 2) {
+                json.removeSurrounding("[", "]").split("\",\"").forEach {
+                    pinnedPlaylists.add(it.removeSurrounding("\""))
+                }
             }
         }
     }
 
     private fun savePinnedPlaylists() {
-        val json = pinnedPlaylists.joinToString(",") { "\"$it\"" }
         val prefs = getSharedPreferences("playlist_pins", Context.MODE_PRIVATE)
-        prefs.edit().putString("list", "[$json]").apply()
+        prefs.edit().putString("list", gson.toJson(pinnedPlaylists)).apply()
     }
 
     private fun setupTopBar() {
@@ -101,9 +112,41 @@ class MainActivity : FragmentActivity() {
                 return@setOnClickListener
             }
             val pick = pinnedPlaylists.random()
-            val intent = Intent(this, SearchResultActivity::class.java)
-            intent.putExtra("keyword", "${pick}歌单")
-            startActivity(intent)
+            loadAndPlay(pick)
+        }
+    }
+
+    private fun loadAndPlay(playlistName: String) {
+        Toast.makeText(this, "正在加载「$playlistName」...", Toast.LENGTH_SHORT).apply {
+            setGravity(Gravity.CENTER, 0, 0)
+            show()
+        }
+        scope.launch {
+            try {
+                val keyword = "${playlistName}歌单"
+                val page1 = MusicApi.searchRaw(keyword, num = 20, page = 1)
+                val songs = page1.songs.toMutableList()
+                if (page1.songs.size >= 20) {
+                    val page2 = MusicApi.searchRaw(keyword, num = 20, page = 2)
+                    songs.addAll(page2.songs)
+                }
+                if (songs.isEmpty()) {
+                    Toast.makeText(this@MainActivity, "未找到歌曲", Toast.LENGTH_SHORT).apply {
+                        setGravity(Gravity.CENTER, 0, 0)
+                        show()
+                    }
+                    return@launch
+                }
+                PlayerManager.play(songs, 0)
+                startActivity(Intent(this@MainActivity, PlayerActivity::class.java).addFlags(
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                ))
+            } catch (_: Exception) {
+                Toast.makeText(this@MainActivity, "加载失败，请重试", Toast.LENGTH_SHORT).apply {
+                    setGravity(Gravity.CENTER, 0, 0)
+                    show()
+                }
+            }
         }
     }
 
@@ -305,10 +348,7 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun registerPlayerCallbacks() {
-        PlayerManager.onStateChanged = { _, _ -> runOnUiThread { syncUI() } }
-        PlayerManager.onProgress = null
-        PlayerManager.onError = null
-        PlayerManager.onLyric = null
+        PlayerManager.addStateListener(stateListener)
     }
 
     private fun syncUI() {
@@ -347,10 +387,7 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun clearPlayerCallbacks() {
-        PlayerManager.onStateChanged = null
-        PlayerManager.onProgress = null
-        PlayerManager.onError = null
-        PlayerManager.onLyric = null
+        PlayerManager.removeStateListener(stateListener)
     }
 
     override fun onDestroy() {
