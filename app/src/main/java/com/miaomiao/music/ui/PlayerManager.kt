@@ -4,7 +4,6 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
-import android.net.Uri
 import com.miaomiao.music.api.MusicApi
 import com.miaomiao.music.model.Song
 import kotlinx.coroutines.CancellationException
@@ -14,10 +13,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.io.File
-import java.util.concurrent.TimeUnit
 
 object PlayerManager {
     private var mediaPlayer: MediaPlayer? = null
@@ -31,19 +26,10 @@ object PlayerManager {
     var loopMode = 0
 
     private var consecutiveErrors = 0
-    private var cacheDir: File? = null
-    private var lyricCacheDir: File? = null
-    private var coverCacheDir: File? = null
     private var initialized = false
     private var loadJob: Job? = null
     private var playRequestId = 0
     private var resumeAfterTransientAudioFocusLoss = false
-
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .followRedirects(true)
-        .build()
 
     var onStateChanged: ((Song?, Boolean) -> Unit)? = null
     var onProgress: ((Int, Int) -> Unit)? = null
@@ -94,17 +80,12 @@ object PlayerManager {
     fun init(context: Context) {
         if (initialized) return
         initialized = true
-        cacheDir = File(context.filesDir, "audio_cache").also { it.mkdirs() }
-        lyricCacheDir = File(context.filesDir, "lyric_cache").also { it.mkdirs() }
-        coverCacheDir = File(context.filesDir, "cover_cache").also { it.mkdirs() }
-        cleanupIncompleteDownloads()
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         requestAudioFocus()
     }
 
     fun play(songs: List<Song>, index: Int) {
         if (index !in songs.indices) return
-        // 如果点击的是当前正在播放的歌曲，继续播放不重启
         val targetSong = songs.getOrNull(index)
         if (targetSong != null &&
             targetSong.id == currentSong?.id &&
@@ -118,7 +99,6 @@ object PlayerManager {
 
     fun playAt(index: Int) {
         if (index in playlist.indices) {
-            // 如果点击的是当前正在播放的歌曲，继续播放不重启
             if (index == currentIndex && mediaPlayer != null) {
                 return
             }
@@ -261,14 +241,15 @@ object PlayerManager {
                 val lyricId = song.lyricId.ifEmpty { song.id }
                 val picId = song.picId.ifEmpty { song.id }
 
+                // 并行获取播放URL、歌词、封面（全部在线，不缓存）
                 val urlDeferred = async(Dispatchers.IO) {
                     try { MusicApi.getPlayUrl(playId, song.source) } catch (_: Exception) { "" }
                 }
                 val lyricDeferred = async(Dispatchers.IO) {
-                    loadLyricWithCache(lyricId, song.source)
+                    try { MusicApi.getLyric(lyricId, song.source) } catch (_: Exception) { "" }
                 }
                 val coverDeferred = async(Dispatchers.IO) {
-                    loadCoverWithCache(picId, song.source)
+                    try { MusicApi.getCover(picId, song.source) } catch (_: Exception) { "" }
                 }
 
                 val url = urlDeferred.await()
@@ -278,6 +259,7 @@ object PlayerManager {
                 if (finalUrl.isEmpty()) {
                     consecutiveErrors++
                     notifyError("获取播放地址失败")
+                    if (consecutiveErrors < 3) next()
                     return@launch
                 }
 
@@ -300,6 +282,7 @@ object PlayerManager {
                 currentFileExt = extractExt(finalUrl)
                 if (requestId != playRequestId) return@launch
 
+                // 直接用远程 URL 流式播放，不缓存
                 startPlayer(finalUrl)
             } catch (_: CancellationException) {
                 // 切歌时协程取消，静默忽略
@@ -308,114 +291,6 @@ object PlayerManager {
                 notifyError("播放失败: ${e.message}")
             }
         }
-    }
-
-    private suspend fun downloadCurrentOnly(songId: String, url: String): String? {
-        return kotlinx.coroutines.withContext(Dispatchers.IO) {
-            try {
-                val dir = cacheDir ?: return@withContext null
-                val ext = extractExt(url)
-                val file = File(dir, "${safeFileName(songId)}.$ext")
-                if (file.exists() && file.length() > 10_000) {
-                    return@withContext file.absolutePath
-                }
-                // 缓存文件太小可能是损坏的，删除重下
-                if (file.exists()) file.delete()
-                val tmpFile = File(dir, "${file.name}.tmp")
-                if (tmpFile.exists()) tmpFile.delete()
-
-                val request = Request.Builder()
-                    .url(url)
-                    .header("User-Agent", "Mozilla/5.0")
-                    .build()
-                val response = httpClient.newCall(request).execute()
-                if (response.isSuccessful) {
-                    val contentType = response.header("Content-Type") ?: ""
-                    // 如果响应不是音频类型，跳过缓存
-                    if (contentType.isNotEmpty() && !contentType.startsWith("audio") && !contentType.startsWith("application/octet-stream")) {
-                        response.close()
-                        return@withContext null
-                    }
-                    response.body?.byteStream()?.use { input ->
-                        tmpFile.outputStream().use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                    if (tmpFile.length() > 10_000) {
-                        if (file.exists()) file.delete()
-                        tmpFile.renameTo(file)
-                        file.absolutePath
-                    } else {
-                        tmpFile.delete()
-                        null
-                    }
-                } else null
-            } catch (_: Exception) {
-                try {
-                    val dir = cacheDir ?: return@withContext null
-                    dir.listFiles()?.filter { it.name.endsWith(".tmp") }?.forEach { it.delete() }
-                } catch (_: Exception) {}
-                null
-            }
-        }
-    }
-
-    private fun cleanupIncompleteDownloads() {
-        try {
-            cacheDir?.listFiles()?.filter { it.name.endsWith(".tmp") }?.forEach { it.delete() }
-        } catch (_: Exception) {}
-    }
-
-    private fun cleanOtherCache(dir: File, keepFileName: String) {
-        try {
-            dir.listFiles()?.forEach { f ->
-                if (f.isFile && f.name != keepFileName) {
-                    f.delete()
-                }
-            }
-        } catch (_: Exception) {}
-    }
-
-    private suspend fun loadLyricWithCache(lyricId: String, source: String): String {
-        try {
-            val dir = lyricCacheDir ?: return ""
-            val file = File(dir, "${safeFileName("${source}_$lyricId")}.lrc")
-            if (file.exists() && file.length() > 0) {
-                return file.readText()
-            }
-            val lyric = MusicApi.getLyric(lyricId, source)
-            if (lyric.isNotBlank()) {
-                file.writeText(lyric)
-            }
-            return lyric
-        } catch (_: Exception) { return "" }
-    }
-
-    private suspend fun loadCoverWithCache(picId: String, source: String): String {
-        try {
-            val dir = coverCacheDir ?: return ""
-            val file = File(dir, "${safeFileName("${source}_$picId")}.jpg")
-            if (file.exists() && file.length() > 0) {
-                return file.absolutePath
-            }
-            val url = MusicApi.getCover(picId, source)
-            if (url.isNotEmpty()) {
-                val request = Request.Builder()
-                    .url(url)
-                    .header("User-Agent", "Mozilla/5.0")
-                    .build()
-                val response = httpClient.newCall(request).execute()
-                if (response.isSuccessful) {
-                    response.body?.byteStream()?.use { input ->
-                        file.outputStream().use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                }
-                return if (file.exists() && file.length() > 0) file.absolutePath else url
-            }
-            return ""
-        } catch (_: Exception) { return "" }
     }
 
     private fun extractExt(url: String): String {
@@ -455,7 +330,7 @@ object PlayerManager {
                 }
                 setOnErrorListener { _, what, extra ->
                     consecutiveErrors++
-                    val uriShort = if (uri.length > 60) uri.takeLast(60) else uri
+                    val uriShort = if (uri.length > 80) "...${uri.takeLast(80)}" else uri
                     notifyError("播放出错 (what=$what, extra=$extra)\n$uriShort")
                     if (consecutiveErrors < 3) next()
                     true
@@ -531,12 +406,4 @@ object PlayerManager {
         onLyric?.invoke(lyric)
         lyricListeners.toList().forEach { it.invoke(lyric) }
     }
-
-    private fun safeFileName(value: String): String {
-        return value.replace(Regex("""[^A-Za-z0-9._-]"""), "_")
-    }
 }
-
-
-
-

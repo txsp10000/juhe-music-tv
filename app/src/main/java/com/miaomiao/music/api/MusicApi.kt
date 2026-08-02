@@ -93,7 +93,7 @@ object MusicApi {
     /** 获取播放URL（999=24bit FLAC无损，最多重试30次） */
     suspend fun getPlayUrl(trackId: String, source: String = "netease"): String = withContext(Dispatchers.IO) {
         retry {
-            val url = "$BASE?types=url&source=$source&id=$trackId&br=320"
+            val url = "$BASE?types=url&source=$source&id=$trackId&br=999"
             val body = httpGet(url)
             val resp = gson.fromJson(body, UrlResponse::class.java)
             resp.url.ifEmpty { throw Exception("播放地址为空") }
