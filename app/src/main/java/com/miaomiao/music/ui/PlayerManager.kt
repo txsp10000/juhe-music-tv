@@ -2,9 +2,11 @@ package com.miaomiao.music.ui
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.net.Uri
+import android.os.Build
 import com.miaomiao.music.api.MusicApi
 import com.miaomiao.music.model.Song
 import kotlinx.coroutines.CancellationException
@@ -21,6 +23,7 @@ object PlayerManager {
     private val scope = CoroutineScope(Dispatchers.Main)
     private var audioManager: AudioManager? = null
     private var appContext: Context? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
 
     var playlist = mutableListOf<Song>()
     var currentIndex = -1
@@ -31,7 +34,7 @@ object PlayerManager {
     private var initialized = false
     private var loadJob: Job? = null
     private var playRequestId = 0
-    private var resumeAfterTransientAudioFocusLoss = false
+    private var resumeAfterAudioFocusLoss = false
 
     var onStateChanged: ((Song?, Boolean) -> Unit)? = null
     var onProgress: ((Int, Int) -> Unit)? = null
@@ -57,24 +60,17 @@ object PlayerManager {
 
     private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
         when (focusChange) {
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                resumeAfterTransientAudioFocusLoss = pauseForAudioFocusLoss()
-            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
             AudioManager.AUDIOFOCUS_LOSS -> {
-                resumeAfterTransientAudioFocusLoss = false
-                pauseForAudioFocusLoss()
+                resumeAfterAudioFocusLoss = pauseForAudioFocusLoss() || resumeAfterAudioFocusLoss
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                mediaPlayer?.setVolume(0.25f, 0.25f)
+                // 语音助手可能以“可降低音量”方式申请焦点，仍应完整静音以免干扰识别。
+                resumeAfterAudioFocusLoss = pauseForAudioFocusLoss() || resumeAfterAudioFocusLoss
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
                 mediaPlayer?.setVolume(1f, 1f)
-                if (resumeAfterTransientAudioFocusLoss) {
-                    mediaPlayer?.start()
-                    isPlaying = true
-                    resumeAfterTransientAudioFocusLoss = false
-                    notifyStateChanged(currentSong, true)
-                }
+                resumePlaybackAfterInterruption(requestAudioFocus = false)
             }
         }
     }
@@ -112,6 +108,7 @@ object PlayerManager {
     fun togglePlayPause() {
         mediaPlayer?.let { mp ->
             if (mp.isPlaying) {
+                resumeAfterAudioFocusLoss = false
                 mp.pause()
                 isPlaying = false
             } else {
@@ -182,7 +179,18 @@ object PlayerManager {
         mediaPlayer?.release()
         mediaPlayer = null
         isPlaying = false
-        audioManager?.abandonAudioFocus(audioFocusChangeListener)
+        resumeAfterAudioFocusLoss = false
+        abandonAudioFocus()
+    }
+
+    private fun abandonAudioFocus() {
+        val am = audioManager ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { am.abandonAudioFocusRequest(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            am.abandonAudioFocus(audioFocusChangeListener)
+        }
     }
 
     fun addStateListener(listener: (Song?, Boolean) -> Unit) {
@@ -217,6 +225,20 @@ object PlayerManager {
 
     fun removeLyricListener(listener: (String) -> Unit) {
         lyricListeners.remove(listener)
+    }
+
+    fun resumePlaybackAfterInterruption(requestAudioFocus: Boolean = true) {
+        if (!resumeAfterAudioFocusLoss || mediaPlayer == null) return
+
+        if (requestAudioFocus && requestAudioFocus() != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) return
+
+        try {
+            mediaPlayer?.start()
+            isPlaying = true
+            resumeAfterAudioFocusLoss = false
+            notifyStateChanged(currentSong, true)
+        } catch (_: IllegalStateException) {
+        }
     }
 
     private fun onComplete() {
@@ -372,6 +394,7 @@ object PlayerManager {
         mediaPlayer?.release()
         mediaPlayer = null
         isPlaying = false
+        resumeAfterAudioFocusLoss = false
     }
 
     private fun pauseForAudioFocusLoss(): Boolean {
@@ -386,12 +409,29 @@ object PlayerManager {
         return wasPlaying
     }
 
-    private fun requestAudioFocus() {
-        audioManager?.requestAudioFocus(
-            audioFocusChangeListener,
-            AudioManager.STREAM_MUSIC,
-            AudioManager.AUDIOFOCUS_GAIN
-        )
+    private fun requestAudioFocus(): Int {
+        val am = audioManager ?: return AudioManager.AUDIOFOCUS_REQUEST_FAILED
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val attrs = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build()
+            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(attrs)
+                .setWillPauseWhenDucked(true)
+                .setAcceptsDelayedFocusGain(true)
+                .setOnAudioFocusChangeListener(audioFocusChangeListener)
+                .build()
+            audioFocusRequest = request
+            return am.requestAudioFocus(request)
+        } else {
+            @Suppress("DEPRECATION")
+            return am.requestAudioFocus(
+                audioFocusChangeListener,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN
+            )
+        }
     }
 
     private fun notifyStateChanged(song: Song?, playing: Boolean) {
