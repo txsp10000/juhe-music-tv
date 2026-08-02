@@ -23,7 +23,12 @@ class PlaylistActivity : FragmentActivity() {
                 PlayerManager.playAt(idx)
                 finish()
             },
-            showFavButton = false
+            showFavButton = false,
+            showDeleteButton = false,
+            onLongPress = { idx ->
+                PlayerManager.removeAt(idx)
+                syncList()
+            }
         )
         binding.rvPlaylist.layoutManager = LinearLayoutManager(this)
         binding.rvPlaylist.adapter = adapter
