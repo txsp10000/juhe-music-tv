@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
+import android.net.Uri
 import com.miaomiao.music.api.MusicApi
 import com.miaomiao.music.model.Song
 import kotlinx.coroutines.CancellationException
@@ -77,9 +78,12 @@ object PlayerManager {
         }
     }
 
+    private var appContext: Context? = null
+
     fun init(context: Context) {
         if (initialized) return
         initialized = true
+        appContext = context.applicationContext
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         requestAudioFocus()
     }
@@ -316,7 +320,16 @@ object PlayerManager {
                         .setUsage(AudioAttributes.USAGE_MEDIA)
                         .build()
                 )
-                setDataSource(uri)
+                val headers = mapOf(
+                    "User-Agent" to "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36",
+                    "Referer" to "https://music.163.com/"
+                )
+                val ctx = appContext
+                if (ctx != null && uri.startsWith("http")) {
+                    setDataSource(ctx, Uri.parse(uri), headers)
+                } else {
+                    setDataSource(uri)
+                }
                 setOnPreparedListener {
                     consecutiveErrors = 0
                     it.start()
