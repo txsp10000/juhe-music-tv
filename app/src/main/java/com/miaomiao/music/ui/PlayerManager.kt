@@ -3,11 +3,8 @@ package com.miaomiao.music.ui
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioManager
+import android.media.MediaPlayer
 import android.net.Uri
-import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
 import com.miaomiao.music.api.MusicApi
 import com.miaomiao.music.model.Song
 import kotlinx.coroutines.CancellationException
@@ -19,7 +16,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 object PlayerManager {
-    private var exoPlayer: ExoPlayer? = null
+    private var mediaPlayer: MediaPlayer? = null
     private var progressJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.Main)
     private var audioManager: AudioManager? = null
@@ -68,12 +65,12 @@ object PlayerManager {
                 pauseForAudioFocusLoss()
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                exoPlayer?.volume = 0.25f
+                mediaPlayer?.setVolume(0.25f, 0.25f)
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
-                exoPlayer?.volume = 1f
+                mediaPlayer?.setVolume(1f, 1f)
                 if (resumeAfterTransientAudioFocusLoss) {
-                    exoPlayer?.play()
+                    mediaPlayer?.start()
                     isPlaying = true
                     resumeAfterTransientAudioFocusLoss = false
                     notifyStateChanged(currentSong, true)
@@ -96,7 +93,7 @@ object PlayerManager {
         if (targetSong != null &&
             targetSong.id == currentSong?.id &&
             targetSong.source == currentSong?.source &&
-            exoPlayer != null && exoPlayer?.isPlaying == true
+            mediaPlayer != null
         ) {
             return
         }
@@ -105,7 +102,7 @@ object PlayerManager {
 
     fun playAt(index: Int) {
         if (index in playlist.indices) {
-            if (index == currentIndex && exoPlayer != null && exoPlayer?.isPlaying == true) {
+            if (index == currentIndex && mediaPlayer != null) {
                 return
             }
             loadAndPlay(playlist.toList(), index)
@@ -113,12 +110,12 @@ object PlayerManager {
     }
 
     fun togglePlayPause() {
-        exoPlayer?.let { player ->
-            if (player.isPlaying) {
-                player.pause()
+        mediaPlayer?.let { mp ->
+            if (mp.isPlaying) {
+                mp.pause()
                 isPlaying = false
             } else {
-                player.play()
+                mp.start()
                 isPlaying = true
             }
             notifyStateChanged(currentSong, isPlaying)
@@ -167,23 +164,23 @@ object PlayerManager {
     }
 
     fun seekTo(positionMs: Long) {
-        exoPlayer?.seekTo(positionMs)
+        mediaPlayer?.seekTo(positionMs.toInt())
     }
 
     fun seekSingle(deltaMs: Int) {
-        exoPlayer?.let { player ->
-            val current = player.currentPosition
-            val duration = player.duration
-            val target = (current + deltaMs).coerceIn(0, if (duration > 0) duration else Long.MAX_VALUE)
-            player.seekTo(target)
+        mediaPlayer?.let { mp ->
+            val current = mp.currentPosition
+            val duration = mp.duration
+            val target = (current + deltaMs).coerceIn(0, if (duration > 0) duration else Int.MAX_VALUE)
+            mp.seekTo(target)
         }
     }
 
     fun release() {
         loadJob?.cancel()
         progressJob?.cancel()
-        exoPlayer?.release()
-        exoPlayer = null
+        mediaPlayer?.release()
+        mediaPlayer = null
         isPlaying = false
         audioManager?.abandonAudioFocus(audioFocusChangeListener)
     }
@@ -308,35 +305,45 @@ object PlayerManager {
     }
 
     private fun startPlayer(uri: String) {
-        stop()
-        val ctx = appContext ?: return
+        mediaPlayer?.release()
+        mediaPlayer = null
         try {
-            val player = ExoPlayer.Builder(ctx).build()
-            player.setMediaItem(MediaItem.fromUri(Uri.parse(uri)))
-            player.addListener(object : Player.Listener {
-                override fun onPlaybackStateChanged(state: Int) {
-                    if (state == Player.STATE_ENDED) {
-                        onComplete()
-                    }
+            mediaPlayer = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .build()
+                )
+                val headers = mapOf(
+                    "User-Agent" to "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36",
+                    "Referer" to "https://music.163.com/"
+                )
+                val ctx = appContext
+                if (ctx != null && uri.startsWith("http")) {
+                    setDataSource(ctx, Uri.parse(uri), headers)
+                } else {
+                    setDataSource(uri)
                 }
-
-                override fun onIsPlayingChanged(playing: Boolean) {
-                    isPlaying = playing
-                    notifyStateChanged(currentSong, playing)
+                setOnPreparedListener {
+                    consecutiveErrors = 0
+                    it.start()
+                    this@PlayerManager.isPlaying = true
+                    notifyStateChanged(currentSong, true)
+                    startProgress()
                 }
-
-                override fun onPlayerError(error: PlaybackException) {
+                setOnCompletionListener {
+                    consecutiveErrors = 0
+                    onComplete()
+                }
+                setOnErrorListener { _, what, extra ->
                     consecutiveErrors++
-                    notifyError("播放出错: ${error.message}")
+                    notifyError("播放出错 (what=$what, extra=$extra)")
                     if (consecutiveErrors < 3) next()
+                    true
                 }
-            })
-            player.prepare()
-            player.play()
-            exoPlayer = player
-            isPlaying = true
-            notifyStateChanged(currentSong, true)
-            startProgress()
+                prepareAsync()
+            }
         } catch (e: Exception) {
             consecutiveErrors++
             notifyError("播放器初始化失败: ${e.message}")
@@ -349,10 +356,10 @@ object PlayerManager {
         progressJob = scope.launch {
             delay(100)
             while (true) {
-                val player = exoPlayer ?: break
+                val mp = mediaPlayer ?: break
                 try {
-                    val pos = player.currentPosition.toInt()
-                    val dur = player.duration.coerceAtLeast(0).toInt()
+                    val pos = mp.currentPosition
+                    val dur = mp.duration.coerceAtLeast(0)
                     notifyProgress(pos, dur)
                 } catch (_: Exception) { break }
                 delay(200)
@@ -362,16 +369,16 @@ object PlayerManager {
 
     private fun stop() {
         progressJob?.cancel()
-        exoPlayer?.release()
-        exoPlayer = null
+        mediaPlayer?.release()
+        mediaPlayer = null
         isPlaying = false
     }
 
     private fun pauseForAudioFocusLoss(): Boolean {
         val wasPlaying = isPlaying
         try {
-            if (exoPlayer?.isPlaying == true) {
-                exoPlayer?.pause()
+            if (mediaPlayer?.isPlaying == true) {
+                mediaPlayer?.pause()
             }
         } catch (_: Exception) {}
         isPlaying = false
